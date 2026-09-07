@@ -321,6 +321,17 @@ hr.sep{border:none; border-top:1px solid var(--border); margin:14px 0;}
       <input type="text" id="modalAssignee" disabled style="background:#f1efe6; color:var(--muted);">
       <p style="font-size:11px; color:var(--muted); margin-top:4px;">يُحدَّد تلقائياً عند ضغط الفني على "قبول المشكلة"</p>
     </div>
+    <div class="field" id="secondAssigneeBox" style="display:none;">
+      <label>👥 فني مساعد (لو الفني الأساسي محتاج مساعدة)</label>
+      <div id="secondAssigneeCurrent" style="display:none; background:var(--gold-light); border:1px solid var(--gold); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+        <span id="secondAssigneeName"></span>
+        <span id="removeSecondAssignee" style="cursor:pointer; color:var(--danger); font-weight:800;">✕ إزالة</span>
+      </div>
+      <div id="secondAssigneePicker" style="display:flex; gap:8px;">
+        <select id="secondAssigneeSelect" style="flex:1;"><option value="">-- اختر فنياً --</option></select>
+        <button type="button" id="addSecondAssigneeBtn" style="padding:9px 16px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:700; white-space:nowrap;">إضافة</button>
+      </div>
+    </div>
     <div class="field">
       <label>ملاحظات الفني *</label>
       <textarea id="modalNotes" placeholder="اكتب ملاحظاتك بعد المعالجة... مثال: المشكلة كانت في كيبل الشبكة LAN مفصول من السويتش"></textarea>
@@ -428,10 +439,16 @@ let currentUser = null; // {uid, name, department, role}
    من المستخدم — بس اسم مستخدم وباسورد بسيطين.
 ============================================================= */
 const STAFF = [
-  { username:'برمجة',   password:'1111', name:'فني البرمجة',         department:'programming',       role:'technician' },
-  { username:'امن',    password:'2222', name:'فني الأمن والصيانة',    department:'cyber_maintenance', role:'technician' },
-  { username:'شبكات',  password:'3333', name:'فني الشبكات',          department:'networks',          role:'technician' },
-  { username:'مدير',   password:'9999', name:'المدير العام',         department:null,                role:'super_admin' }
+  { username:'برمجة',        password:'1111', name:'فني البرمجة',            department:'programming',       role:'technician' },
+  { username:'رئيس_البرمجة', password:'1112', name:'رئيس قسم البرمجة',       department:'programming',       role:'department_head' },
+
+  { username:'امن',          password:'2222', name:'فني الأمن والصيانة',      department:'cyber_maintenance', role:'technician' },
+  { username:'رئيس_الأمن',    password:'2223', name:'رئيس قسم الأمن والصيانة', department:'cyber_maintenance', role:'department_head' },
+
+  { username:'شبكات',        password:'3333', name:'فني الشبكات',            department:'networks',          role:'technician' },
+  { username:'رئيس_الشبكات', password:'3334', name:'رئيس قسم الشبكات',       department:'networks',          role:'department_head' },
+
+  { username:'مدير',         password:'9999', name:'المدير العام',           department:null,                role:'super_admin' }
 ];
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
@@ -668,8 +685,7 @@ function initApp(){
 
     // لو نافذة تفاصيل بلاغ مفتوحة حالياً وهي بلاغ نشط، حدّث بياناتها لحظياً
     if(currentModalId && document.getElementById('modalOverlay').style.display === 'flex'){
-      const t = allTickets.find(x=>x.id===currentModalId);
-      if(t) openModal(currentModalId);
+      if(allTickets.find(x=>x.id===currentModalId)) openModal(currentModalId);
     }
   }, err=>{
     console.error('Tickets listener error (check Firestore rules / composite index):', err);
@@ -741,7 +757,7 @@ function renderTickets(){
       <td data-label="الاستعجال"><span class="urg ${urgClass(t.urgency)}">${esc(t.urgency)}</span></td>
       <td data-label="الوقت">${fmtTime(t.createdAt)}</td>
       <td data-label="الحالة"><span class="badge ${statusClass(t.status)}">${esc(t.status)}</span>${t.employeeFeedback === 'لم يكتمل بعد' ? ' <span title="الموظف أفاد أنها لم تكتمل" style="color:#9a3412;">⚠️</span>' : ''}</td>
-      <td data-label="الفني">${esc(t.assignee) || '—'}</td>
+      <td data-label="الفني">${esc(t.assignee) || '—'}${t.secondAssignee ? ' + ' + esc(t.secondAssignee) : ''}</td>
     </tr>
   `).join('');
 
@@ -808,7 +824,7 @@ async function renderArchive(forceRefresh){
       <td data-label="المكتب/القسم الإداري">${esc(t.office)} — ${esc(t.department)}</td>
       <td data-label="النوع">${esc(t.issueType)}</td>
       <td data-label="تاريخ الإكمال">${fmtTime(t.resolvedAt)}</td>
-      <td data-label="الفني">${esc(t.assignee) || '—'}</td>
+      <td data-label="الفني">${esc(t.assignee) || '—'}${t.secondAssignee ? ' + ' + esc(t.secondAssignee) : ''}</td>
       <td data-label="التقييم">${t.rating ? '⭐'.repeat(t.rating) : '—'}</td>
     </tr>
   `).join('');
@@ -839,7 +855,7 @@ document.getElementById('chatSendBtn').addEventListener('click', sendStaffMessag
 document.getElementById('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendStaffMessage(); });
 async function sendStaffMessage(){
   if(!currentModalId) return;
-  const t = allTickets.find(x=>x.id===currentModalId);
+  const t = findTicketAnywhere(currentModalId);
   if(t && t.chatClosed) return;
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
@@ -904,8 +920,12 @@ async function renderSimilarIssues(t){
   `).join('');
 }
 
+function findTicketAnywhere(id){
+  return allTickets.find(x=>x.id===id) || completedTicketsCache.find(x=>x.id===id);
+}
+
 function openModal(id){
-  const t = allTickets.find(x=>x.id===id);
+  let t = findTicketAnywhere(id);
   if(!t) return;
   currentModalId = id;
 
@@ -930,17 +950,18 @@ function openModal(id){
   `;
   renderSimilarIssues(t);
 
-  const canManage = currentUser.role === 'super_admin' || currentUser.role === 'department_head' || t.assignee === currentUser.name;
+  const canManage = currentUser.role === 'super_admin' || currentUser.role === 'department_head' || t.assignee === currentUser.name || t.secondAssignee === currentUser.name;
 
-  // زر "قبول المشكلة": يظهر فقط لو البلاغ لسه في الانتظار وغير مسند لحد
+  // زر "قبول المشكلة": حق الفنيين فقط - رئيس القسم والمدير العام لهم أدوار إشراف/إسناد، مش قبول بلاغات لنفسهم
   const claimBtn = document.getElementById('claimBtn');
   const myAvailability = staffAvailability[currentUser.name];
   const iAmOnLeave = myAvailability && myAvailability.available === false;
-  if(t.status === 'في الانتظار' && !t.assignee && !iAmOnLeave){
+  const iAmTechnician = currentUser.role === 'technician';
+  if(t.status === 'في الانتظار' && !t.assignee && iAmTechnician && !iAmOnLeave){
     claimBtn.style.display = 'block';
     claimBtn.disabled = false;
     claimBtn.textContent = '✋ قبول المشكلة';
-  }else if(t.status === 'في الانتظار' && !t.assignee && iAmOnLeave){
+  }else if(t.status === 'في الانتظار' && !t.assignee && iAmTechnician && iAmOnLeave){
     claimBtn.style.display = 'block';
     claimBtn.disabled = true;
     claimBtn.textContent = '🏖️ أنت مسجَّل في إجازة — تواصل مع المدير لإرجاعك للخدمة';
@@ -951,6 +972,26 @@ function openModal(id){
   document.getElementById('modalStatus').value = t.status || 'في الانتظار';
   document.getElementById('modalStatus').disabled = !canManage;
   document.getElementById('modalAssignee').value = t.assignee || 'غير مسند بعد';
+
+  // الفني المساعد: يظهر ويُدار بواسطة رئيس القسم/المدير العام فقط
+  const isManagerRole = currentUser.role === 'department_head' || currentUser.role === 'super_admin';
+  const secondBox = document.getElementById('secondAssigneeBox');
+  if(isManagerRole && t.assignee){
+    secondBox.style.display = 'block';
+    if(t.secondAssignee){
+      document.getElementById('secondAssigneeCurrent').style.display = 'flex';
+      document.getElementById('secondAssigneeName').textContent = '👤 ' + t.secondAssignee;
+      document.getElementById('secondAssigneePicker').style.display = 'none';
+    }else{
+      document.getElementById('secondAssigneeCurrent').style.display = 'none';
+      document.getElementById('secondAssigneePicker').style.display = 'flex';
+      const techsInDept = allUsers.filter(u=>u.department===t.targetDept && u.role==='technician' && u.name!==t.assignee);
+      const sel = document.getElementById('secondAssigneeSelect');
+      sel.innerHTML = '<option value="">-- اختر فنياً --</option>' + techsInDept.map(u=>`<option value="${esc(u.name)}">${esc(u.name)}</option>`).join('');
+    }
+  }else{
+    secondBox.style.display = 'none';
+  }
   document.getElementById('modalNotes').value = t.technicianNotes || '';
   document.getElementById('modalNotes').disabled = !canManage;
   document.getElementById('modalRootCauseCategory').value = t.rootCauseCategory || '';
@@ -997,6 +1038,33 @@ document.getElementById('toggleTransferBtn').addEventListener('click', ()=>{
 /* ---------- قبول المشكلة (Claim Issue) ----------
    يثبّت اسم الفني ووقت البدء تلقائياً بشكل غير قابل للتعديل يدوياً،
    ويحوّل الحالة تلقائياً من "في الانتظار" إلى "قيد التنفيذ". ---------- */
+/* ---------- فني مساعد (Second Assignee) — يضيفه رئيس القسم/المدير العام فقط ---------- */
+document.getElementById('addSecondAssigneeBtn').addEventListener('click', async ()=>{
+  if(!currentModalId) return;
+  const name = document.getElementById('secondAssigneeSelect').value;
+  if(!name){ alert('اختر فنياً أولاً'); return; }
+  await db.collection('tickets').doc(currentModalId).update({
+    secondAssignee: name,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    messages: firebase.firestore.FieldValue.arrayUnion({
+      from: 'system', senderName: '', text: `👥 تمت إضافة ${name} كفني مساعد بواسطة ${currentUser.name}`, at: new Date().toISOString()
+    }),
+    activityLog: firebase.firestore.FieldValue.arrayUnion({
+      action: 'إضافة فني مساعد: ' + name, by: currentUser.name, note:'', at: new Date().toISOString()
+    })
+  });
+});
+document.getElementById('removeSecondAssignee').addEventListener('click', async ()=>{
+  if(!currentModalId) return;
+  await db.collection('tickets').doc(currentModalId).update({
+    secondAssignee: null,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    activityLog: firebase.firestore.FieldValue.arrayUnion({
+      action: 'إزالة الفني المساعد', by: currentUser.name, note:'', at: new Date().toISOString()
+    })
+  });
+});
+
 document.getElementById('claimBtn').addEventListener('click', async ()=>{
   if(!currentModalId) return;
   const btn = document.getElementById('claimBtn');
@@ -1047,7 +1115,8 @@ document.getElementById('closeChatBtn').addEventListener('click', async ()=>{
 /* ---------- SAVE (status / notes / توثيق الحل) ---------- */
 document.getElementById('modalSaveBtn').addEventListener('click', async ()=>{
   if(!currentModalId) return;
-  const t = allTickets.find(x=>x.id===currentModalId);
+  const t = findTicketAnywhere(currentModalId);
+  if(!t) return;
   const status = document.getElementById('modalStatus').value;
   const notes = document.getElementById('modalNotes').value.trim() || null;
   const rootCauseCategory = document.getElementById('modalRootCauseCategory').value;
@@ -1102,7 +1171,8 @@ document.getElementById('confirmTransferBtn').addEventListener('click', async ()
     alert('الرجاء كتابة سبب التحويل قبل التأكيد');
     return;
   }
-  const t = allTickets.find(x=>x.id===currentModalId);
+  const t = findTicketAnywhere(currentModalId);
+  if(!t) return;
   await db.collection('tickets').doc(currentModalId).update({
     targetDept: newDept,
     status: 'في الانتظار',
@@ -1300,7 +1370,7 @@ async function renderWorkload(forceRefresh){
   const completed = completedTicketsCache;
 
   const rows = names.map(name=>{
-    const activeCount = allTickets.filter(t=>t.assignee === name).length;
+    const activeCount = allTickets.filter(t=>t.assignee === name || t.secondAssignee === name).length;
     const resolvedCount = completed.filter(t=>t.assignee === name).length;
     const isActive = activeCount > 0;
     return { name, activeCount, resolvedCount, isActive };
