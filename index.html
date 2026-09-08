@@ -1188,7 +1188,11 @@ document.getElementById('confirmTransferBtn').addEventListener('click', async ()
 
 /* =====================  فريق القسم (من الحسابات المسجّلة فعلياً)  ===================== */
 function techChipHtml(u){
-  const canManage = currentUser.role === 'super_admin' || currentUser.role === 'department_head';
+  // رئيس القسم يقدر يسجّل إجازة لفنيي قسمه بس (مش لنفسه ولا لرؤساء أقسام تانيين).
+  // المدير العام بس هو اللي يقدر يسجّل إجازة لرئيس قسم (أو لأي حد تاني).
+  const canManage =
+    currentUser.role === 'super_admin'
+    || (currentUser.role === 'department_head' && u.role === 'technician');
   const status = staffAvailability[u.name];
   const isUnavailable = status && status.available === false;
   const badge = isUnavailable
@@ -1358,8 +1362,8 @@ async function renderWorkload(forceRefresh){
   const box = document.getElementById('workloadList');
   if(!box) return;
 
-  // اجمع أسماء الفنيين المطلوب عرضهم: فنيي قسم المستخدم الحالي، أو كل الفنيين لو مدير عام
-  const names = [...new Set(allUsers.map(u=>u.name))];
+  // اجمع أسماء الفنيين المطلوب عرضهم فقط (رؤساء الأقسام والمدير العام لا يقبلون بلاغات، فلا داعي يظهروا هنا)
+  const names = [...new Set(allUsers.filter(u=>u.role==='technician').map(u=>u.name))];
 
   if(!names.length){ box.innerHTML = '<p style="color:var(--muted); font-size:13px;">لا يوجد فنيون مسجّلون بعد</p>'; return; }
 
