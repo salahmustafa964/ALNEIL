@@ -421,7 +421,7 @@ const auth = firebase.auth();
    يجب أن يطابق نفس الكائن الموجود في تطبيق الموظف حرفياً.
 ======================================================================= */
 const DEPARTMENTS = {
-  cyber_maintenance: { label: 'الأمن السيبراني والصيانة' },
+  cyber_maintenance: { label: 'الأمن السيبراني والدعم الفني' },
   networks:          { label: 'الشبكات وحوسبة المحطات' },
   programming:       { label: 'البرمجة' }
 };
@@ -442,8 +442,8 @@ const STAFF = [
   { username:'برمجة',        password:'1111', name:'فني البرمجة',            department:'programming',       role:'technician' },
   { username:'رئيس_البرمجة', password:'1112', name:'رئيس قسم البرمجة',       department:'programming',       role:'department_head' },
 
-  { username:'امن',          password:'2222', name:'فني الأمن والصيانة',      department:'cyber_maintenance', role:'technician' },
-  { username:'رئيس_الأمن',    password:'2223', name:'رئيس قسم الأمن والصيانة', department:'cyber_maintenance', role:'department_head' },
+  { username:'امن',          password:'2222', name:'فني الأمن السيبراني والدعم الفني',      department:'cyber_maintenance', role:'technician' },
+  { username:'رئيس_الأمن',    password:'2223', name:'رئيس قسم الأمن السيبراني والدعم الفني', department:'cyber_maintenance', role:'department_head' },
 
   { username:'شبكات',        password:'3333', name:'فني الشبكات',            department:'networks',          role:'technician' },
   { username:'رئيس_الشبكات', password:'3334', name:'رئيس قسم الشبكات',       department:'networks',          role:'department_head' },
